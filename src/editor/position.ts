@@ -650,7 +650,7 @@ export class Position extends vscode.Position {
   ): Position {
     for (let currentLine = this.line; currentLine >= 0; currentLine--) {
       let positions = this.getAllPositions(
-        this.editor.getLineAt(new vscode.Position(currentLine, 0)).text,
+        this.editor.getLineAt(this.editor.position(currentLine, 0)).text,
         regex
       );
       let newCharacter = _.find(
@@ -682,7 +682,7 @@ export class Position extends vscode.Position {
       currentLine++
     ) {
       let positions = this.getAllPositions(
-        this.editor.getLineAt(new vscode.Position(currentLine, 0)).text,
+        this.editor.getLineAt(this.editor.position(currentLine, 0)).text,
         regex
       );
       let newCharacter = _.find(
@@ -708,7 +708,7 @@ export class Position extends vscode.Position {
       currentLine++
     ) {
       let positions = this.getAllEndPositions(
-        this.editor.getLineAt(new vscode.Position(currentLine, 0)).text,
+        this.editor.getLineAt(this.editor.position(currentLine, 0)).text,
         regex
       );
       let index = _.findIndex(
@@ -743,7 +743,7 @@ export class Position extends vscode.Position {
       currentLine++
     ) {
       let positions = this.getAllEndPositions(
-        this.editor.getLineAt(new vscode.Position(currentLine, 0)).text,
+        this.editor.getLineAt(this.editor.position(currentLine, 0)).text,
         regex
       );
       let newCharacter = _.find(
@@ -773,7 +773,7 @@ export class Position extends vscode.Position {
       currentLine--
     ) {
       let endPositions = this.getAllEndPositions(
-        this.editor.getLineAt(new vscode.Position(currentLine, 0)).text,
+        this.editor.getLineAt(this.editor.position(currentLine, 0)).text,
         regex
       );
       let newCharacter = _.find(
@@ -818,7 +818,7 @@ export class Position extends vscode.Position {
       currentLine++
     ) {
       let endPositions = this.getAllEndPositions(
-        this.editor.getLineAt(new vscode.Position(currentLine, 0)).text,
+        this.editor.getLineAt(this.editor.position(currentLine, 0)).text,
         regex
       );
       let newCharacter = _.find(
@@ -850,7 +850,7 @@ export class Position extends vscode.Position {
       currentLine++
     ) {
       let allPositions = this.getAllPositions(
-        this.editor.getLineAt(new vscode.Position(currentLine, 0)).text,
+        this.editor.getLineAt(this.editor.position(currentLine, 0)).text,
         regex
       );
       let newCharacter = _.find(
@@ -875,7 +875,7 @@ export class Position extends vscode.Position {
   ): Position {
     // If the cursor is at an empty line, it's the end of a paragraph and the begin of another paragraph
     // Find the first non-whitepsace character.
-    if (this.editor.getLineAt(new vscode.Position(this.line, 0)).text) {
+    if (this.editor.getLineAt(this.editor.position(this.line, 0)).text) {
       return paragraphEnd;
     } else {
       for (
@@ -884,7 +884,7 @@ export class Position extends vscode.Position {
         currentLine++
       ) {
         let nonWhitePositions = this.getAllPositions(
-          this.editor.getLineAt(new vscode.Position(currentLine, 0)).text,
+          this.editor.getLineAt(this.editor.position(currentLine, 0)).text,
           /\S/g
         );
         let newCharacter = _.find(

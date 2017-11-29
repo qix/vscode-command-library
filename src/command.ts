@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import * as invariant from "invariant";
 
+import { textEditorFromVSCode } from "./vscode/textEditor";
+
 Object.keys(require.cache).forEach(name => {
   if (name.startsWith("/home/josh/code/command-library/out")) {
     delete require.cache[name];
@@ -109,15 +111,15 @@ function movementRange(editor: TextEditor, pos: Position, movement): Range {
     if (movement.count && movement.count > 1) {
       pos = pos.getDownByCount(movement.count - 1);
     }
-    return editor.range(start, pos.getNextLineBegin());
+    return new Range(start, pos.getNextLineBegin());
   } else if (movement.type === "line" && movement.modifier === "up") {
     const end = pos.getNextLineBegin();
     if (movement.count && movement.count > 1) {
       pos = pos.getUpByCount(movement.count - 1);
     }
-    return editor.range(pos.getLineBegin(), end);
+    return new Range(pos.getLineBegin(), end);
   }
-  return editor.range(pos, forwardPosition(editor, pos, movement));
+  return new Range(pos, forwardPosition(editor, pos, movement));
 }
 
 function movementPositions(editor: TextEditor, movement): Array<Position> {
@@ -146,7 +148,7 @@ function movementSelections(editor: TextEditor, movement): Array<Selection> {
     if (range.end.isAfter(end)) {
       end = range.end;
     }
-    return editor.selection(start, end);
+    return new Selection(start, end);
   });
 }
 
@@ -156,7 +158,7 @@ const editorCommandHandlers: {
   async move(editor, { movement }) {
     return editor.withSelections(
       movementPositions(editor, movement).map(pos => {
-        return editor.selection(pos, pos);
+        return new Selection(pos, pos);
       })
     );
   },
@@ -214,7 +216,7 @@ const editorCommandHandlers: {
           edits.delete(range);
           if (range.contains(selection.active)) {
             const pos = range.start;
-            return editor.selection(pos, pos);
+            return new Selection(pos, pos);
           } else {
             return selection;
           }
@@ -248,7 +250,7 @@ const commandHandlers: {
 Object.entries(editorCommandHandlers).forEach(([name, cb]) => {
   commandHandlers[name] = async args => {
     if (vscode.window.activeTextEditor) {
-      let editor: TextEditor = TextEditor.fromVSCode(
+      let editor: TextEditor = textEditorFromVSCode(
         vscode.window.activeTextEditor
       );
       await cb(editor, args);

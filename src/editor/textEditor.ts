@@ -4,58 +4,86 @@ import * as vscode from "vscode";
 import { Position } from "./position";
 import { Selection } from "./selection";
 import { Range } from "./range";
-import { TextEdit } from "vscode";
+import { isContext } from "vm";
+
+export interface ITextEditorEdit {
+  delete(location: Range | Selection): void;
+  insert(location: Position, value: string): void;
+  replace(location: Position | Range | Selection, value: string): void;
+}
+export interface ITextLine {
+  firstNonWhitespaceCharacterIndex: number;
+  isEmptyOrWhitespace: boolean;
+  lineNumber: number;
+  range: Range;
+  rangeIncludingLineBreak: Range;
+  text: string;
+}
+export interface ITextDocument {
+  fileName: string;
+  isClosed: boolean;
+  isDirty: boolean;
+  isUntitled: boolean;
+  languageId: string;
+  lineCount: number;
+  version: number;
+  getText(range?: Range): string;
+  getWordRangeAtPosition(position: Position, regex?: RegExp): Range | undefined;
+  lineAt(line: number): ITextLine;
+  lineAt(pos: Position): ITextLine;
+  offsetAt(position: Position): number;
+  positionAt(offset: number): Position;
+  save(): Thenable<boolean>;
+  validatePosition(position: Position): Position;
+  validateRange(range: Range): Range;
+}
+export interface ITextOptions {
+  insertSpaces?: boolean | string;
+  tabSize?: number | string;
+}
+export interface ITextEditor {
+  document: ITextDocument;
+  options: ITextOptions;
+  getSelections(editor: TextEditor): Array<Selection>;
+  withSelections(value: Array<Selection>): ITextEditor;
+  edit(cb: (edits: ITextEditorEdit) => void): Promise<ITextEditor>;
+  command(name: string): Promise<ITextEditor>;
+}
 
 export class TextEditor {
-  private _editor: vscode.TextEditor;
+  private _editor: ITextEditor;
 
-  constructor(editor: vscode.TextEditor) {
+  constructor(editor: ITextEditor) {
     this._editor = editor;
   }
 
   public position(line: number, character: number) {
     return new Position(this, line, character);
   }
-  public selection(anchor: Position, active: Position) {
-    return new Selection(this, anchor, active);
-  }
-  public range(start: Position, end: Position) {
-    return new Range(this, start, end);
-  }
 
-  static fromVSCode(editor: vscode.TextEditor) {
-    return new TextEditor(editor);
+  get selection(): Selection {
+    return this._editor.getSelections(this)[0];
   }
-
-  get document(): vscode.TextDocument {
+  get document(): ITextDocument {
     return this._editor.document;
   }
-  get options(): vscode.TextEditorOptions {
+  get options(): ITextOptions {
     return this._editor.options;
   }
   get selections(): Array<Selection> {
-    return this._editor.selections.map(sel => {
-      return this.selection(
-        this.position(sel.anchor.line, sel.anchor.character),
-        this.position(sel.active.line, sel.active.character)
-      );
-    });
+    return this._editor.getSelections(this);
   }
 
   withSelections(value: Array<Selection>): TextEditor {
-    this._editor.selections = value;
-    return this;
+    return new TextEditor(this._editor.withSelections(value));
   }
 
   async command(name: string): Promise<TextEditor> {
-    return vscode.commands.executeCommand(name).then(() => {
-      return this;
-    });
+    return new TextEditor(await this._editor.command(name));
   }
 
-  async edit(cb: (edits: vscode.TextEditorEdit) => void): Promise<TextEditor> {
-    await this._editor.edit(cb);
-    return this;
+  async edit(cb: (edits: ITextEditorEdit) => void): Promise<TextEditor> {
+    return new TextEditor(await this._editor.edit(cb));
   }
 
   /*
@@ -97,7 +125,7 @@ export class TextEditor {
     });
   }
 
-  static async delete(range: vscode.Range): Promise<boolean> {
+  static async delete(range: Range): Promise<boolean> {
     return this._editor.edit(editBuilder => {
       editBuilder.delete(range);
     });
@@ -109,7 +137,7 @@ export class TextEditor {
         const prevEndOfLine = position.getPreviousLineBegin().getLineEnd();
 
         await TextEditor.delete(
-          new vscode.Range(
+          new Range(
             position.getPreviousLineBegin().getLineEnd(),
             position.getLineBegin()
           )
@@ -132,7 +160,7 @@ export class TextEditor {
         }
       }
 
-      await TextEditor.delete(new vscode.Range(position, leftPosition));
+      await TextEditor.delete(new Range(position, leftPosition));
 
       return leftPosition;
     }
@@ -143,17 +171,17 @@ export class TextEditor {
   }
 
   async deleteDocument(): Promise<TextEditor> {
-    const start = new vscode.Position(0, 0);
+    const start = this.position(0, 0);
     const lastLine = this._editor.document.lineCount - 1;
     const end = this._editor.document.lineAt(lastLine).range.end;
-    const range = new vscode.Range(start, end);
+    const range = new Range(start, end);
 
     return this.edit(editBuilder => {
       editBuilder.delete(range);
     });
   }
 
-  async replace(range: vscode.Range, text: string): Promise<TextEditor> {
+  async replace(range: Range, text: string): Promise<TextEditor> {
     return this.edit(editBuilder => {
       editBuilder.replace(range, text);
     });
@@ -168,14 +196,14 @@ export class TextEditor {
   }
 
   readLine(): string {
-    const lineNo = this._editor.selection.active.line;
+    const lineNo = this.selection.active.line;
 
     return this._editor.document.lineAt(lineNo).text;
   }
 
   readLineAt(lineNo: number): string {
     if (lineNo === null) {
-      lineNo = this._editor.selection.active.line;
+      lineNo = this.selection.active.line;
     }
 
     if (lineNo >= this._editor.document.lineCount) {
@@ -189,23 +217,23 @@ export class TextEditor {
     return this._editor.document.lineCount;
   }
 
-  getLineAt(position: vscode.Position): vscode.TextLine {
-    return this._editor.document.lineAt(position);
+  getLineAt(position: Position): ITextLine {
+    return this._editor.document.lineAt(position.line);
   }
 
-  getSelection(): vscode.Range {
-    return this._editor.selection;
+  getSelection(): Range {
+    return new Range(this.selection.start, this.selection.end);
   }
 
-  getText(selection: vscode.Range): string {
+  getText(selection: Range): string {
     return this._editor.document.getText(selection);
   }
 
-  isFirstLine(position: vscode.Position): boolean {
+  isFirstLine(position: Position): boolean {
     return position.line === 0;
   }
 
-  isLastLine(position: vscode.Position): boolean {
+  isLastLine(position: Position): boolean {
     return position.line === this._editor.document.lineCount - 1;
   }
 
