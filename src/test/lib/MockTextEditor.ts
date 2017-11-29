@@ -77,28 +77,36 @@ class MockTextOptions implements ITextOptions {
   tabSize?: number | string;
 }
 
-export class MockTextEditor implements ITextEditor {
-  document: MockTextDocument;
-  options: MockTextOptions;
-  selections: Array<Selection>;
-  constructor(selections: Array<Selection>) {
+class MockTextEditorSystem implements ITextEditor {
+  readonly document: MockTextDocument;
+  readonly options: MockTextOptions;
+  _selections: Array<Selection>;
+
+  constructor(selections?: Array<Selection>) {
     this.document = new MockTextDocument();
-    this.selections = selections;
+    this._selections = selections || [new Selection(0, 0, 0, 0)];
   }
   getSelections(editor: TextEditor): Array<Selection> {
-    return [];
+    return this._selections;
   }
   withSelections(value: Array<Selection>): ITextEditor {
-    return new MockTextEditor(value);
+    return new MockTextEditorSystem(value);
   }
   async edit(cb: (edits: ITextEditorEdit) => void): Promise<ITextEditor> {
-    return new MockTextEditor(this.selections);
+    return new MockTextEditorSystem(this._selections);
   }
   async command(name: string): Promise<ITextEditor> {
     return this;
   }
+}
+
+export class MockTextEditor extends TextEditor {
+  constructor() {
+    super(new MockTextEditorSystem());
+  }
 
   renderAsString() {
+    console.log(this.selections);
     return this.document.getText();
   }
 }

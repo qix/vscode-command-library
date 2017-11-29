@@ -258,17 +258,17 @@ Object.entries(editorCommandHandlers).forEach(([name, cb]) => {
   };
 });
 
-exports.execute = async function(commandArgs) {
-  const args = commandArgs.arguments[0];
-
+export async function execute(args: any): Promise<boolean> {
   if (!commandHandlers.hasOwnProperty(args.command)) {
     vscode.window.showErrorMessage(`Unknown command: ${args.command}`);
-    return;
+    return false;
   }
   try {
     await commandHandlers[args.command](args);
+    return true;
   } catch (err) {
     vscode.window.showErrorMessage(err.toString());
     console.error(err.stack);
+    return false;
   }
-};
+}

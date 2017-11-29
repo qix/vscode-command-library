@@ -7,14 +7,18 @@
   "engines": {
     "vscode": "^1.18.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onCommand:extension.sayHello"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:pegvoice.commander"
+  ],
   "main": "./out/extension",
   "contributes": {
     "commands": [
       {
-        "command": "extension.sayHello",
-        "title": "Hello World"
+        "command": "pegvoice.commander",
+        "title": "Run command using pegvoice commander"
       }
     ]
   },
@@ -23,25 +27,32 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "postinstall": "node ./node_modules/vscode/bin/install",
-    "test": "npm run compile && node ./node_modules/vscode/bin/test"
+    "test": "npm run compile && node ./node_modules/vscode/bin/test",
+    "test:unit:watch": "jest --watch unit"
   },
   "devDependencies": {
-    "@types/mocha": "^2.2.42",
     "@types/node": "^7.0.43",
     "jest": "^21.2.1",
     "typescript": "^2.6.1",
     "vscode": "^1.1.6"
   },
   "dependencies": {
+    "@types/jest": "^21.1.8",
     "assert": "^1.4.1",
     "invariant": "^2.2.2",
     "lodash": "^4.17.4"
   },
   "jest": {
-    "moduleFileExtensions": ["ts", "tsx", "js"],
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js"
+    ],
     "transform": {
       "^.+\\.(ts|tsx)$": "<rootDir>/preprocessor.js"
     },
-    "testMatch": ["**/src/test/**/*.ts"]
+    "testMatch": [
+      "**/src/test/**/*.ts"
+    ]
   }
 }
