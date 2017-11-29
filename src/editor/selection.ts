@@ -1,15 +1,28 @@
-import * as vscode from "vscode";
 import * as invariant from "invariant";
+import { Selection as CoreSelection } from "../core/selection";
 import { Position } from "./position";
 import { TextEditor } from "./textEditor";
 
-export class Selection extends vscode.Selection {
+export class Selection extends CoreSelection {
   active: Position;
   anchor: Position;
+  editor: TextEditor;
 
-  constructor(anchor: Position, active: Position) {
-    invariant(anchor.editor === active.editor, "Editors did not match");
+  get active(): Position {
+    return Position.FromCore(this.editor, super().active);
+  }
+
+  constructor(editor: TextEditor, anchor: Position, active: Position) {
     super(anchor, active);
+    this.editor = editor;
+  }
+
+  FromCore(editor: TextEditor, selection: CoreSelection): Selection {
+    return new Selection(
+      editor,
+      Position.FromCore(editor, selection.anchor),
+      Position.FromCore(editor, selection.active)
+    );
   }
 
   get start(): Position {
