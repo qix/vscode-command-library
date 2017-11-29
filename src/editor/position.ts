@@ -1,10 +1,11 @@
 "use strict";
 
 import * as _ from "lodash";
-import { Position as CorePosition } from "../core/position";
+import * as vscode from "vscode";
 import { TextEditor } from "./textEditor";
+import { TextEdit } from "vscode";
 
-export class Position extends CorePosition {
+export class Position extends vscode.Position {
   private static NonWordCharacters = "/\\()\"':,.;<>~!@#$%^&*|+=[]{}`?-";
   private static NonBigWordCharacters = "";
 
@@ -29,8 +30,8 @@ export class Position extends CorePosition {
     return this._editor;
   }
 
-  public static FromCore(editor: TextEditor, pos: CorePosition): Position {
-    return new Position(editor, pos.line, pos.character);
+  public static FromVSCode(editor: TextEditor, pos: vscode.Position): Position {
+    return editor.position(pos.line, pos.character);
   }
 
   /**

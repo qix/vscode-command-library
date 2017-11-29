@@ -1,7 +1,6 @@
 "use strict";
 
 import * as vscode from "vscode";
-import { Selection as CoreSelection } from "../core/selection";
 import { Position } from "./position";
 import { Selection } from "./selection";
 import { Range } from "./range";
@@ -63,7 +62,7 @@ export class TextEditor {
   }
 
   get selection(): Selection {
-    return this.selections[0];
+    return this._editor.getSelections(this)[0];
   }
   get document(): ITextDocument {
     return this._editor.document;
@@ -72,9 +71,7 @@ export class TextEditor {
     return this._editor.options;
   }
   get selections(): Array<Selection> {
-    return this._editor.getSelections(this).map((selection: CoreSelection) => {
-      return Selection.FromCore(selection);
-    });
+    return this._editor.getSelections(this);
   }
 
   withSelections(value: Array<Selection>): TextEditor {
