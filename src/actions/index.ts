@@ -1,6 +1,5 @@
-import * as vscode from "vscode";
 import { NumericString } from "./../common/number/numericString";
-import { Position, TextEditor } from "../editor";
+import { Position, Range, TextEditor } from "../editor";
 
 /**
  * A command is something like <escape>, :, v, i, etc.
@@ -19,12 +18,10 @@ export abstract class BaseCommand {
   /**
    * Run the command a single time.
    */
-  public async exec(
+  public abstract async exec(
     position: Position,
     editor: TextEditor
-  ): Promise<TextEditor> {
-    throw new Error("Not implemented!");
-  }
+  ): Promise<Position>;
 
   /**
    * Run the command the number of times TextEditor wants us to.
@@ -47,13 +44,14 @@ export abstract class BaseCommand {
 
 abstract class IncrementDecrementNumberAction extends BaseCommand {
   offset: number;
-  /*
-  public async exec(position: Position, editor: TextEditor): Promise<TextEditor> {
-    const text = TextEditor.getLineAt(position).text;
 
-    for (let { start, end, word } of Position.IterateWords(
-      position.getWordLeft(true)
-    )) {
+  public async exec(position: Position, editor: TextEditor): Promise<Position> {
+    const text = editor.getLineAt(position).text;
+    const count = 1;
+
+    for (let { start, end, word } of position
+      .getWordLeft(true)
+      .IterateWords()) {
       // '-' doesn't count as a word, but is important to include in parsing the number
       if (text[start.character - 1] === "-") {
         start = start.getLeft();
@@ -63,20 +61,22 @@ abstract class IncrementDecrementNumberAction extends BaseCommand {
       const num = NumericString.parse(word);
 
       if (num !== null) {
-        editor.cursorPosition = await this.replaceNum(
+        await this.replaceNum(
+          editor,
           num,
-          this.offset * (editor.count || 1),
+          this.offset * count,
           start,
           end
         );
-        return editor;
+        return start;
       }
     }
     // No usable numbers, return the original position
-    return editor;
+    return position;
   }
 
   public async replaceNum(
+    editor: TextEditor,
     start: NumericString,
     offset: number,
     startPos: Position,
@@ -86,24 +86,20 @@ abstract class IncrementDecrementNumberAction extends BaseCommand {
     start.value += offset;
     const newNum = start.toString();
 
-    const range = new vscode.Range(startPos, endPos.getRight());
+    const range = new Range(startPos, endPos.getRight());
 
     if (oldWidth === newNum.length) {
-      await TextEditor.replace(range, newNum);
+      await editor.replace(range, newNum);
     } else {
       // Can't use replace, since new number is a different width than old
-      await TextEditor.delete(range);
-      await TextEditor.insertAt(newNum, startPos);
+      await editor.delete(range);
+      await editor.insertAt(newNum, startPos);
       // Adjust end position according to difference in width of number-string
-      endPos = new Position(
-        endPos.line,
-        endPos.character + (newNum.length - oldWidth)
-      );
-    }
+      endPos = endPos.translate(0, newNum.length - oldWidth);
+    });
 
     return endPos;
   }
-  */
 }
 
 export class IncrementNumberAction extends IncrementDecrementNumberAction {

@@ -1,6 +1,5 @@
 "use strict";
 
-import * as vscode from "vscode";
 import { Position } from "./position";
 import { Selection } from "./selection";
 import { Range } from "./range";
@@ -58,7 +57,7 @@ export class TextEditor {
   }
 
   public position(line: number, character: number) {
-    return new Position(this, line, character);
+    return new Position(line, character);
   }
 
   get selection(): Selection {
@@ -75,15 +74,48 @@ export class TextEditor {
   }
 
   withSelections(value: Array<Selection>): TextEditor {
-    return new TextEditor(this._editor.withSelections(value));
+    // @TODO: This does basic deduplication and sorting, but need a better
+    // solution to that.
+    const seen = new Set();
+    const selections = [...value]
+      .sort((a, b) => a.compareTo(b))
+      .filter(selection => {
+        const key = JSON.stringify([
+          selection.anchor.line,
+          selection.anchor.character,
+          selection.active.line,
+          selection.active.character
+        ]);
+        if (!seen.has(key)) {
+          seen.add(key);
+          return true;
+        }
+        return false;
+      });
+    this._editor = this._editor.withSelections(selections);
+    return this;
   }
 
   async command(name: string): Promise<TextEditor> {
-    return new TextEditor(await this._editor.command(name));
+    this._editor = await this._editor.command(name);
+    return this;
   }
 
   async edit(cb: (edits: ITextEditorEdit) => void): Promise<TextEditor> {
-    return new TextEditor(await this._editor.edit(cb));
+    this._editor = await this._editor.edit(cb);
+    return this;
+  }
+
+  async insertAt(text: string, position: Position): Promise<TextEditor> {
+    return this.edit(editBuilder => {
+      editBuilder.insert(position, text);
+    });
+  }
+
+  async delete(range: Range): Promise<TextEditor> {
+    return this.edit(editBuilder => {
+      editBuilder.delete(range);
+    });
   }
 
   /*
@@ -115,22 +147,6 @@ export class TextEditor {
 
     return true;
   }
-
-  static async insertAt(
-    text: string,
-    position: vscode.Position
-  ): Promise<boolean> {
-    return this._editor.edit(editBuilder => {
-      editBuilder.insert(position, text);
-    });
-  }
-
-  static async delete(range: Range): Promise<boolean> {
-    return this._editor.edit(editBuilder => {
-      editBuilder.delete(range);
-    });
-  }
-
   static async backspace(position: Position): Promise<Position> {
     if (position.character === 0) {
       if (position.line > 0) {

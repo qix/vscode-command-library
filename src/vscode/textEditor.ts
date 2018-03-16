@@ -10,6 +10,16 @@ import {
 } from "../editor/textEditor";
 import { Selection, Position, Range } from "../editor";
 
+function vscodePos(pos: Position) {
+  return new vscode.Position(pos.line, pos.character);
+}
+function vscodeSel(sel: Selection) {
+  return new vscode.Selection(vscodePos(sel.anchor), vscodePos(sel.active));
+}
+function vscodeRange(sel: Range) {
+  return new vscode.Range(vscodePos(sel.start), vscodePos(sel.end));
+}
+
 class VscodeDocument implements ITextDocument {
   _document: vscode.TextDocument;
   _converter: convertPosition;
@@ -44,13 +54,16 @@ class VscodeDocument implements ITextDocument {
     return this._document.version;
   }
   getText(range?: Range): string {
-    return this._document.getText(range);
+    return this._document.getText(vscodeRange(range));
   }
   getWordRangeAtPosition(
     position: Position,
     regex?: RegExp
   ): Range | undefined {
-    const rv = this._document.getWordRangeAtPosition(position, regex);
+    const rv = this._document.getWordRangeAtPosition(
+      vscodePos(position),
+      regex
+    );
     if (rv) {
       return new Range(this._converter(rv.start), this._converter(rv.end));
     }
@@ -62,11 +75,11 @@ class VscodeDocument implements ITextDocument {
     if (typeof line === "number") {
       return this._document.lineAt(line);
     } else {
-      return this._document.lineAt(line);
+      return this._document.lineAt(vscodePos(line));
     }
   }
   offsetAt(position: Position): number {
-    return this._document.offsetAt(position);
+    return this._document.offsetAt(vscodePos(position));
   }
   positionAt(offset: number): Position {
     return this._converter(this._document.positionAt(offset));
@@ -75,15 +88,41 @@ class VscodeDocument implements ITextDocument {
     return this._document.save();
   }
   validatePosition(position: Position): Position {
-    return this._converter(this._document.validatePosition(position));
+    return this._converter(
+      this._document.validatePosition(vscodePos(position))
+    );
   }
   validateRange(range: Range): Range {
-    const rv = this._document.validateRange(range);
+    const rv = this._document.validateRange(vscodeRange(range));
     return new Range(this._converter(rv.start), this._converter(rv.end));
   }
 }
 
 type convertPosition = ((position: vscode.Position) => Position);
+
+class VscodeEditorEdits implements ITextEditorEdit {
+  wrapped: vscode.TextEditorEdit;
+  constructor(wrapped: vscode.TextEditorEdit) {
+    this.wrapped = wrapped;
+  }
+  delete(location: Range | Selection): void {
+    if (location instanceof Selection) {
+      return this.wrapped.delete(vscodeSel(location));
+    } else {
+      return this.wrapped.delete(vscodeRange(location));
+    }
+  }
+  insert(location: Position, value: string): void {
+    return this.wrapped.insert(vscodePos(location), value);
+  }
+  replace(location: Position | Range | Selection, value: string): void {
+    if (location instanceof Position) {
+      return this.wrapped.replace(vscodePos(location), value);
+    } else {
+      return this.wrapped.replace(vscodeRange(location), value);
+    }
+  }
+}
 class VscodeTextEditor implements ITextEditor {
   private _vsEditor: vscode.TextEditor;
   private _converter: convertPosition;
@@ -109,13 +148,18 @@ class VscodeTextEditor implements ITextEditor {
     });
   }
   withSelections(value: Array<Selection>): ITextEditor {
-    this._vsEditor.selections = value;
+    this._vsEditor.selections = value.map(vscodeSel);
     return this;
   }
   async edit(cb: (edits: ITextEditorEdit) => void) {
-    return this._vsEditor.edit(cb).then(() => {
-      return this;
-    });
+    return this._vsEditor
+      .edit(vscodeEditor => {
+        const editorEdits = new VscodeEditorEdits(vscodeEditor);
+        cb(editorEdits);
+      })
+      .then(() => {
+        return this;
+      });
   }
 
   async command(name: string): Promise<ITextEditor> {

@@ -1,23 +1,75 @@
 "use strict";
 
 import * as _ from "lodash";
-import * as vscode from "vscode";
 import { TextEditor } from "./textEditor";
-import { TextEdit } from "vscode";
+import { getActiveTextEditor } from "../activeTextEditor";
 
-export class Position extends vscode.Position {
+function illegalArgument(message = "") {
+  throw new Error(`Illegal argument: ${message}`);
+}
+
+export class Position {
   private static NonWordCharacters = "/\\()\"':,.;<>~!@#$%^&*|+=[]{}`?-";
   private static NonBigWordCharacters = "";
 
   private _nonWordCharRegex: RegExp;
   private _nonBigWordCharRegex: RegExp;
   private _sentenceEndRegex: RegExp;
-  private _editor: TextEditor;
 
-  constructor(editor: TextEditor, line: number, character: number) {
-    super(line, character);
+  static Min(...positions: Position[]): Position {
+    let result = positions.pop();
+    for (let p of positions) {
+      if (p.isBefore(result)) {
+        result = p;
+      }
+    }
+    return result;
+  }
 
-    this._editor = editor;
+  static Max(...positions: Position[]): Position {
+    let result = positions.pop();
+    for (let p of positions) {
+      if (p.isAfter(result)) {
+        result = p;
+      }
+    }
+    return result;
+  }
+
+  static isPosition(other: any): other is Position {
+    if (!other) {
+      return false;
+    }
+    if (other instanceof Position) {
+      return true;
+    }
+    let { line, character } = <Position>other;
+    if (typeof line === "number" && typeof character === "number") {
+      return true;
+    }
+    return false;
+  }
+
+  private _line: number;
+  private _character: number;
+
+  get line(): number {
+    return this._line;
+  }
+
+  get character(): number {
+    return this._character;
+  }
+
+  constructor(line: number, character: number) {
+    if (line < 0) {
+      throw illegalArgument("line must be positive");
+    }
+    if (character < 0) {
+      throw illegalArgument("character must be positive");
+    }
+    this._line = line;
+    this._character = character;
 
     this._nonWordCharRegex = this.makeWordRegex(Position.NonWordCharacters);
     this._nonBigWordCharRegex = this.makeWordRegex(
@@ -26,12 +78,124 @@ export class Position extends vscode.Position {
     this._sentenceEndRegex = /[\.!\?]{1}([ \n\t]+|$)/g;
   }
 
-  get editor(): TextEditor {
-    return this._editor;
+  isBefore(other: Position): boolean {
+    if (this._line < other._line) {
+      return true;
+    }
+    if (other._line < this._line) {
+      return false;
+    }
+    return this._character < other._character;
   }
 
-  public static FromVSCode(editor: TextEditor, pos: vscode.Position): Position {
-    return editor.position(pos.line, pos.character);
+  isBeforeOrEqual(other: Position): boolean {
+    if (this._line < other._line) {
+      return true;
+    }
+    if (other._line < this._line) {
+      return false;
+    }
+    return this._character <= other._character;
+  }
+
+  isAfter(other: Position): boolean {
+    return !this.isBeforeOrEqual(other);
+  }
+
+  isAfterOrEqual(other: Position): boolean {
+    return !this.isBefore(other);
+  }
+
+  isEqual(other: Position): boolean {
+    return this._line === other._line && this._character === other._character;
+  }
+
+  compareTo(other: Position): number {
+    if (this._line < other._line) {
+      return -1;
+    } else if (this._line > other.line) {
+      return 1;
+    } else {
+      // equal line
+      if (this._character < other._character) {
+        return -1;
+      } else if (this._character > other._character) {
+        return 1;
+      } else {
+        // equal line and character
+        return 0;
+      }
+    }
+  }
+
+  translate(change: { lineDelta?: number; characterDelta?: number }): Position;
+  translate(lineDelta?: number, characterDelta?: number): Position;
+  translate(
+    lineDeltaOrChange: number | { lineDelta?: number; characterDelta?: number },
+    characterDelta: number = 0
+  ): Position {
+    if (lineDeltaOrChange === null || characterDelta === null) {
+      throw illegalArgument();
+    }
+
+    let lineDelta: number;
+    if (typeof lineDeltaOrChange === "undefined") {
+      lineDelta = 0;
+    } else if (typeof lineDeltaOrChange === "number") {
+      lineDelta = lineDeltaOrChange;
+    } else {
+      lineDelta =
+        typeof lineDeltaOrChange.lineDelta === "number"
+          ? lineDeltaOrChange.lineDelta
+          : 0;
+      characterDelta =
+        typeof lineDeltaOrChange.characterDelta === "number"
+          ? lineDeltaOrChange.characterDelta
+          : 0;
+    }
+
+    if (lineDelta === 0 && characterDelta === 0) {
+      return this;
+    }
+    return new Position(this.line + lineDelta, this.character + characterDelta);
+  }
+
+  with(change: { line?: number; character?: number }): Position;
+  with(line?: number, character?: number): Position;
+  with(
+    lineOrChange: number | { line?: number; character?: number },
+    character: number = this.character
+  ): Position {
+    if (lineOrChange === null || character === null) {
+      throw illegalArgument();
+    }
+
+    let line: number;
+    if (typeof lineOrChange === "undefined") {
+      line = this.line;
+    } else if (typeof lineOrChange === "number") {
+      line = lineOrChange;
+    } else {
+      line =
+        typeof lineOrChange.line === "number" ? lineOrChange.line : this.line;
+      character =
+        typeof lineOrChange.character === "number"
+          ? lineOrChange.character
+          : this.character;
+    }
+
+    if (line === this.line && character === this.character) {
+      return this;
+    }
+    return new Position(line, character);
+  }
+
+  toJSON(): any {
+    return { line: this.line, character: this.character };
+  }
+
+  get editor(): TextEditor {
+    return getActiveTextEditor();
   }
 
   /**
@@ -56,7 +220,7 @@ export class Position extends vscode.Position {
     forward = true
   ): Iterable<{ line: string; char: string; pos: Position }> {
     const start = this;
-    const editor = this._editor;
+    const editor = this.editor;
 
     let lineIndex: number, charIndex: number;
 

@@ -7,6 +7,7 @@ import {
   TextEditor
 } from "../../editor/textEditor";
 import { Position, Range, Selection } from "../../editor";
+import { TextEditorEdit } from "../../editor/textEditorEdit";
 
 class MockTextLine implements ITextLine {
   firstNonWhitespaceCharacterIndex: number;
@@ -16,8 +17,8 @@ class MockTextLine implements ITextLine {
   rangeIncludingLineBreak: Range;
   text: string;
 
-  constructor() {
-    this.text = "hello";
+  constructor(text: string) {
+    this.text = text;
   }
 }
 
@@ -31,14 +32,14 @@ class MockTextDocument implements ITextDocument {
 
   _text: string;
 
-  constructor() {
+  constructor(text: string) {
     this.fileName = "sample.txt";
     this.isClosed = false;
     this.isDirty = false;
     this.isUntitled = false;
     this.languageId = "text";
 
-    this._text = "sample\nfile";
+    this._text = text;
   }
 
   get lineCount(): number {
@@ -54,7 +55,11 @@ class MockTextDocument implements ITextDocument {
     return;
   }
   lineAt(pos: number | Position): MockTextLine {
-    return new MockTextLine();
+    if (pos instanceof Position) {
+      pos = pos.line;
+    }
+    const lines = this._text.split("\n");
+    return new MockTextLine(lines[pos]);
   }
   offsetAt(position: Position): number {
     return 0;
@@ -66,10 +71,36 @@ class MockTextDocument implements ITextDocument {
     return true;
   }
   validatePosition(position: Position): Position {
-    return;
+    return position;
   }
   validateRange(range: Range): Range {
-    return;
+    return range;
+  }
+
+  // Additional api
+  get lines(): Array<string> {
+    return this._text.split("\n");
+  }
+  replace(range: Range, text: string) {
+    this._text = this.lines
+      .map((line, idx) => {
+        const eol = idx === this.lines.length - 1 ? "" : "\n";
+        let prefix = "";
+        if (idx === range.start.line) {
+          let rv = line.substring(0, range.start.character) + text;
+          if (idx === range.end.line) {
+            rv += line.substring(range.end.character) + eol;
+          }
+          return rv;
+        } else if (idx > range.start.line && idx < range.end.line) {
+          return "";
+        } else if (idx === range.end.line) {
+          return line.substring(range.end.character) + eol;
+        } else {
+          return line + eol;
+        }
+      })
+      .join("");
   }
 }
 class MockTextOptions implements ITextOptions {
@@ -82,18 +113,28 @@ class MockTextEditorSystem implements ITextEditor {
   readonly options: MockTextOptions;
   _selections: Array<Selection>;
 
-  constructor(selections?: Array<Selection>) {
-    this.document = new MockTextDocument();
+  constructor(text: string, selections?: Array<Selection>) {
+    this.document = new MockTextDocument(text);
     this._selections = selections || [new Selection(0, 0, 0, 0)];
   }
   getSelections(editor: TextEditor): Array<Selection> {
     return this._selections;
   }
   withSelections(value: Array<Selection>): ITextEditor {
-    return new MockTextEditorSystem(value);
+    this._selections = value;
+    return this;
   }
   async edit(cb: (edits: ITextEditorEdit) => void): Promise<ITextEditor> {
-    return new MockTextEditorSystem(this._selections);
+    const edits = new TextEditorEdit(this.document, {
+      undoStopAfter: false,
+      undoStopBefore: false
+    });
+    cb(edits);
+    edits.finalize().edits.forEach(edit => {
+      this.document.replace(edit.range, edit.text || "");
+    });
+
+    return this;
   }
   async command(name: string): Promise<ITextEditor> {
     return this;
@@ -101,12 +142,52 @@ class MockTextEditorSystem implements ITextEditor {
 }
 
 export class MockTextEditor extends TextEditor {
-  constructor() {
-    super(new MockTextEditorSystem());
+  constructor(text: string, selections?: Array<Selection>) {
+    super(new MockTextEditorSystem(text, selections));
   }
 
   renderAsString() {
-    console.log(this.selections);
-    return this.document.getText();
+    const markers: Array<{
+      idx: number;
+      pos: Position;
+      sel: Selection;
+      end: number;
+    }> = [];
+
+    this.selections.forEach((sel, idx) => {
+      markers.push(
+        {
+          idx,
+          pos: sel.start,
+          sel,
+          end: 0
+        },
+        {
+          idx,
+          pos: sel.end,
+          sel,
+          end: 1
+        }
+      );
+    });
+    markers.sort((a, b) => {
+      return a.pos.compareTo(b.pos) || a.end - b.end;
+    });
+
+    const lines = this.document.getText().split("\n");
+    markers.reverse().forEach(({ idx, pos, sel, end }) => {
+      let symbol;
+      if (sel.isEmpty) {
+        symbol = end ? "|" : "";
+      } else {
+        const active = pos === sel.active ? "|" : "";
+        symbol = end ? `${active}>` : `<${active}`;
+      }
+      lines[pos.line] =
+        lines[pos.line].substring(0, pos.character) +
+        symbol +
+        lines[pos.line].substring(pos.character);
+    });
+    return lines.join("\n");
   }
 }
