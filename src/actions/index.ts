@@ -96,7 +96,7 @@ abstract class IncrementDecrementNumberAction extends BaseCommand {
       await editor.insertAt(newNum, startPos);
       // Adjust end position according to difference in width of number-string
       endPos = endPos.translate(0, newNum.length - oldWidth);
-    });
+    }
 
     return endPos;
   }
