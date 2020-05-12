@@ -251,6 +251,7 @@ export async function increment(editor: TextEditor) {
 export const commands: {
   [key: string]: (editor: TextEditor, args?: any) => Promise<TextEditor>;
 } = {
+  copy,
   cursor,
   select,
   delete: delete_,
